@@ -87,6 +87,26 @@
     .no-school-note { font-size: 0.8rem; color: var(--muted); margin-top: 0.25rem; }
     .week-sum-label { color: var(--muted); }
     .empty-note { text-align: center; color: var(--muted); font-size: 0.9rem; padding: 1rem 0; }
+    .btn-edit { background: none; border: none; cursor: pointer; font-size: 0.95rem; padding: 0.1rem 0.3rem; border-radius: 6px; color: var(--muted); vertical-align: middle; }
+    .btn-edit:hover { background: var(--border); color: var(--text); }
+    .btn-add-entry { background: none; border: 1px dashed var(--border); color: var(--muted); border-radius: 6px; padding: 0.15rem 0.5rem; font-size: 0.78rem; cursor: pointer; }
+    .btn-add-entry:hover { border-color: var(--primary); color: var(--primary); }
+
+    /* Edit modal */
+    #edit-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 300; align-items: center; justify-content: center; padding: 1rem; }
+    #edit-modal.open { display: flex; }
+    .edit-box { background: white; border-radius: 20px; padding: 1.5rem; width: 100%; max-width: 340px; }
+    .edit-box h3 { font-size: 1rem; margin-bottom: 0.25rem; }
+    .edit-box .edit-date { font-size: 0.85rem; color: var(--muted); margin-bottom: 1.25rem; }
+    .edit-box input[type=time] { width: 100%; border: 1px solid var(--border); border-radius: 10px; padding: 0.7rem 1rem; font-size: 1.2rem; outline: none; text-align: center; }
+    .edit-box input[type=time]:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(79,110,247,0.1); }
+    .edit-actions { display: flex; gap: 0.75rem; margin-top: 1.25rem; }
+    .edit-actions .btn-confirm { flex: 1; background: var(--primary); color: white; border: none; border-radius: 10px; padding: 0.7rem; font-size: 0.95rem; font-weight: 600; cursor: pointer; }
+    .edit-actions .btn-confirm:hover { background: var(--primary-dark); }
+    .edit-actions .btn-cancel { flex: 1; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 10px; padding: 0.7rem; font-size: 0.95rem; cursor: pointer; }
+    .edit-actions .btn-cancel:hover { background: var(--border); }
+    .btn-delete-entry { width: 100%; background: none; border: 1px solid var(--border); color: var(--muted); border-radius: 10px; padding: 0.55rem; font-size: 0.85rem; cursor: pointer; margin-top: 0.6rem; }
+    .btn-delete-entry:hover { border-color: var(--danger); color: var(--danger); }
   </style>
 </head>
 <body>
@@ -153,6 +173,20 @@
     </div>
   </div>
 </main>
+
+<!-- Edit modal -->
+<div id="edit-modal">
+  <div class="edit-box">
+    <h3>Abholzeit bearbeiten</h3>
+    <div class="edit-date" id="edit-date-label"></div>
+    <input type="time" id="edit-time-input">
+    <div class="edit-actions">
+      <button class="btn-cancel" onclick="closeEditModal()">Abbrechen</button>
+      <button class="btn-confirm" onclick="saveEditedEntry()">Speichern</button>
+    </div>
+    <button class="btn-delete-entry" id="btn-delete-entry" onclick="deleteEditedEntry()">Eintrag löschen</button>
+  </div>
+</div>
 
 <!-- Settings panel -->
 <div id="settings-panel">
@@ -403,13 +437,16 @@ function renderWeek() {
 
     let pickupCell = '—';
     let durationCell = '—';
+    const isFuture = d > new Date() && !isToday;
     if (noSchool) {
       pickupCell = '<span class="tag-no-school">kein Schultag</span>';
     } else if (entry && entry.pickupTime) {
-      pickupCell = entry.pickupTime + ' Uhr';
       const mins = calcCare(entry.schoolEnd || schoolEnd, entry.pickupTime);
       weekTotal += mins;
       durationCell = `<span class="duration-cell">${formatMinutes(mins)}</span>`;
+      pickupCell = `${entry.pickupTime} Uhr <button class="btn-edit" onclick="openEditModal('${key}')" title="Bearbeiten">✏️</button>`;
+    } else if (!isFuture && !noSchool) {
+      pickupCell = `<button class="btn-add-entry" onclick="openEditModal('${key}')">+ eintragen</button>`;
     }
 
     tr.innerHTML = `
@@ -454,6 +491,55 @@ function resetToday() {
   saveEntries(entries);
   render();
 }
+
+// ── Edit modal ────────────────────────────────────────────────────────────────
+
+let editingKey = null;
+
+function openEditModal(key) {
+  editingKey = key;
+  const entries = loadEntries();
+  const entry = entries[key];
+  const d = new Date(key + 'T12:00:00');
+  document.getElementById('edit-date-label').textContent =
+    DAY_NAMES[d.getDay()] + ', ' + d.toLocaleDateString('de-DE');
+  document.getElementById('edit-time-input').value = entry ? entry.pickupTime : '';
+  document.getElementById('btn-delete-entry').style.display = entry ? 'block' : 'none';
+  document.getElementById('edit-modal').classList.add('open');
+  setTimeout(() => document.getElementById('edit-time-input').focus(), 50);
+}
+
+function closeEditModal() {
+  document.getElementById('edit-modal').classList.remove('open');
+  editingKey = null;
+}
+
+function saveEditedEntry() {
+  const time = document.getElementById('edit-time-input').value;
+  if (!time) return;
+  const s = loadSettings();
+  const d = new Date(editingKey + 'T12:00:00');
+  const dk = getDayKey(d.getDay());
+  const schoolEnd = s.schoolEnd[dk];
+  const entries = loadEntries();
+  entries[editingKey] = { pickupTime: time, schoolEnd };
+  saveEntries(entries);
+  closeEditModal();
+  render();
+}
+
+function deleteEditedEntry() {
+  if (!confirm('Eintrag wirklich löschen?')) return;
+  const entries = loadEntries();
+  delete entries[editingKey];
+  saveEntries(entries);
+  closeEditModal();
+  render();
+}
+
+document.getElementById('edit-modal').addEventListener('click', function(e) {
+  if (e.target === this) closeEditModal();
+});
 
 // ── Settings ──────────────────────────────────────────────────────────────────
 
