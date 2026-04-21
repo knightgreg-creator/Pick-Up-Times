@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hort Abholzeiten</title>
+  <style>
+    :root {
+      --primary: #4f6ef7;
+      --primary-dark: #3a56d4;
+      --success: #22c55e;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --bg: #f1f5f9;
+      --card: #ffffff;
+      --text: #1e293b;
+      --muted: #64748b;
+      --border: #e2e8f0;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+    header { background: var(--primary); color: white; padding: 1rem 1.5rem; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 8px rgba(0,0,0,0.15); position: sticky; top: 0; z-index: 100; }
+    header h1 { font-size: 1.2rem; font-weight: 700; }
+    header button { background: rgba(255,255,255,0.2); border: none; color: white; padding: 0.4rem 0.8rem; border-radius: 8px; cursor: pointer; font-size: 1.2rem; }
+    header button:hover { background: rgba(255,255,255,0.3); }
+
+    main { max-width: 640px; margin: 0 auto; padding: 1.5rem 1rem 6rem; }
+
+    .card { background: var(--card); border-radius: 16px; padding: 1.25rem; margin-bottom: 1rem; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
+    .card h2 { font-size: 0.85rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 1rem; }
+
+    /* Budget bar */
+    .budget-numbers { display: flex; justify-content: space-between; margin-bottom: 0.5rem; font-size: 0.9rem; }
+    .budget-bar-bg { background: var(--border); border-radius: 999px; height: 12px; overflow: hidden; }
+    .budget-bar-fill { height: 100%; border-radius: 999px; transition: width 0.4s ease; background: var(--success); }
+    .budget-bar-fill.warn { background: var(--warning); }
+    .budget-bar-fill.danger { background: var(--danger); }
+    .budget-sub { display: flex; justify-content: space-between; margin-top: 0.5rem; font-size: 0.8rem; color: var(--muted); }
+
+    /* Pickup button */
+    .pickup-section { text-align: center; padding: 0.5rem 0; }
+    .pickup-section .day-label { font-size: 1rem; color: var(--muted); margin-bottom: 0.25rem; }
+    .pickup-section .school-end { font-size: 0.85rem; color: var(--muted); margin-bottom: 1rem; }
+    .pickup-section .school-end span { color: var(--text); font-weight: 600; }
+    .btn-pickup { background: var(--primary); color: white; border: none; border-radius: 20px; padding: 1rem 2.5rem; font-size: 1.3rem; font-weight: 700; cursor: pointer; box-shadow: 0 4px 16px rgba(79,110,247,0.4); transition: transform 0.1s, box-shadow 0.1s; width: 100%; max-width: 320px; }
+    .btn-pickup:active { transform: scale(0.97); box-shadow: 0 2px 8px rgba(79,110,247,0.3); }
+    .btn-pickup:disabled { background: var(--border); color: var(--muted); box-shadow: none; cursor: default; }
+    .today-result { margin-top: 1rem; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 12px; padding: 1rem; }
+    .today-result .time-big { font-size: 2rem; font-weight: 700; color: var(--success); }
+    .today-result .duration { font-size: 0.9rem; color: var(--muted); margin-top: 0.25rem; }
+    .btn-reset { background: none; border: 1px solid var(--border); color: var(--muted); padding: 0.35rem 0.9rem; border-radius: 8px; cursor: pointer; font-size: 0.8rem; margin-top: 0.75rem; }
+    .btn-reset:hover { border-color: var(--danger); color: var(--danger); }
+
+    /* Weekly table */
+    .week-nav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+    .week-nav span { font-weight: 600; font-size: 0.95rem; }
+    .week-nav button { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 0.3rem 0.7rem; cursor: pointer; font-size: 1rem; color: var(--text); }
+    .week-nav button:hover { background: var(--border); }
+    .week-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+    .week-table th { text-align: left; color: var(--muted); font-weight: 600; padding: 0.4rem 0.5rem; border-bottom: 1px solid var(--border); }
+    .week-table td { padding: 0.55rem 0.5rem; border-bottom: 1px solid var(--border); vertical-align: middle; }
+    .week-table tr:last-child td { border-bottom: none; }
+    .week-table tr.today-row td { background: #eff6ff; }
+    .week-table .tag-no-school { font-size: 0.75rem; color: var(--muted); font-style: italic; }
+    .week-table .duration-cell { font-weight: 600; color: var(--primary); }
+    .week-total { display: flex; justify-content: space-between; margin-top: 1rem; padding-top: 0.75rem; border-top: 2px solid var(--border); font-weight: 700; }
+
+    /* Settings panel */
+    #settings-panel { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 200; overflow-y: auto; }
+    #settings-panel.open { display: flex; align-items: flex-start; justify-content: center; padding: 2rem 1rem; }
+    .settings-box { background: white; border-radius: 20px; padding: 1.5rem; width: 100%; max-width: 500px; }
+    .settings-box h2 { font-size: 1.2rem; margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center; }
+    .settings-box h2 button { background: none; border: none; font-size: 1.4rem; cursor: pointer; color: var(--muted); }
+    .form-group { margin-bottom: 1.25rem; }
+    .form-group label { display: block; font-size: 0.85rem; font-weight: 600; color: var(--muted); margin-bottom: 0.4rem; }
+    .form-group input { width: 100%; border: 1px solid var(--border); border-radius: 10px; padding: 0.6rem 0.9rem; font-size: 1rem; outline: none; }
+    .form-group input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(79,110,247,0.1); }
+    .school-times-grid { display: grid; gap: 0.75rem; }
+    .day-row { display: flex; align-items: center; gap: 0.75rem; }
+    .day-row label { width: 100px; font-size: 0.9rem; font-weight: 500; }
+    .day-row input[type=time] { flex: 1; }
+    .day-row input[type=checkbox] { width: 18px; height: 18px; cursor: pointer; }
+    .btn-save { width: 100%; background: var(--primary); color: white; border: none; border-radius: 12px; padding: 0.85rem; font-size: 1rem; font-weight: 600; cursor: pointer; margin-top: 0.5rem; }
+    .btn-save:hover { background: var(--primary-dark); }
+
+    .no-school-note { font-size: 0.8rem; color: var(--muted); margin-top: 0.25rem; }
+    .week-sum-label { color: var(--muted); }
+    .empty-note { text-align: center; color: var(--muted); font-size: 0.9rem; padding: 1rem 0; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>🏫 Hort Abholzeiten</h1>
+  <button onclick="openSettings()" title="Einstellungen">⚙️</button>
+</header>
+
+<main>
+  <!-- Budget overview -->
+  <div class="card" id="budget-card">
+    <h2>Betreuungskontingent</h2>
+    <div class="budget-numbers">
+      <span id="budget-used-label">0 Std. verbraucht</span>
+      <span id="budget-total-label">von 0 Std.</span>
+    </div>
+    <div class="budget-bar-bg">
+      <div class="budget-bar-fill" id="budget-bar" style="width:0%"></div>
+    </div>
+    <div class="budget-sub">
+      <span id="budget-week-label">Diese Woche: 0 Min.</span>
+      <span id="budget-remaining-label">Verbleibend: 0 Std.</span>
+    </div>
+  </div>
+
+  <!-- Today pickup -->
+  <div class="card" id="today-card">
+    <h2>Heute abholen</h2>
+    <div class="pickup-section" id="pickup-section">
+      <div class="day-label" id="today-day-label"></div>
+      <div class="school-end" id="today-school-end"></div>
+      <button class="btn-pickup" id="btn-pickup" onclick="recordPickup()">Jetzt abholen</button>
+      <div class="today-result" id="today-result" style="display:none">
+        <div class="time-big" id="result-time"></div>
+        <div class="duration" id="result-duration"></div>
+        <button class="btn-reset" onclick="resetToday()">Eintrag zurücksetzen</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Weekly view -->
+  <div class="card">
+    <h2>Wochenübersicht</h2>
+    <div class="week-nav">
+      <button onclick="changeWeek(-1)">◀</button>
+      <span id="week-label"></span>
+      <button onclick="changeWeek(1)">▶</button>
+    </div>
+    <table class="week-table">
+      <thead>
+        <tr>
+          <th>Tag</th>
+          <th>Unterricht bis</th>
+          <th>Abholung</th>
+          <th>Dauer</th>
+        </tr>
+      </thead>
+      <tbody id="week-tbody"></tbody>
+    </table>
+    <div class="week-total">
+      <span class="week-sum-label">Gesamt diese Woche</span>
+      <span id="week-total-display">0 Min.</span>
+    </div>
+  </div>
+</main>
+
+<!-- Settings panel -->
+<div id="settings-panel">
+  <div class="settings-box">
+    <h2>Einstellungen <button onclick="closeSettings()">✕</button></h2>
+
+    <div class="form-group">
+      <label>Gesamtkontingent (Stunden)</label>
+      <input type="number" id="s-budget" min="0" step="0.5" placeholder="z.B. 50">
+    </div>
+
+    <div class="form-group">
+      <label>Unterrichtsende pro Tag <span class="no-school-note">(Haken = kein Schultag)</span></label>
+      <div class="school-times-grid">
+        <div class="day-row">
+          <label>Montag</label>
+          <input type="time" id="s-mon" value="13:15">
+          <input type="checkbox" id="s-mon-off" title="Kein Schultag">
+        </div>
+        <div class="day-row">
+          <label>Dienstag</label>
+          <input type="time" id="s-tue" value="13:15">
+          <input type="checkbox" id="s-tue-off" title="Kein Schultag">
+        </div>
+        <div class="day-row">
+          <label>Mittwoch</label>
+          <input type="time" id="s-wed" value="12:15">
+          <input type="checkbox" id="s-wed-off" title="Kein Schultag">
+        </div>
+        <div class="day-row">
+          <label>Donnerstag</label>
+          <input type="time" id="s-thu" value="13:15">
+          <input type="checkbox" id="s-thu-off" title="Kein Schultag">
+        </div>
+        <div class="day-row">
+          <label>Freitag</label>
+          <input type="time" id="s-fri" value="12:15">
+          <input type="checkbox" id="s-fri-off" title="Kein Schultag">
+        </div>
+      </div>
+    </div>
+
+    <button class="btn-save" onclick="saveSettings()">Speichern</button>
+  </div>
+</div>
+
+<script>
+const DAY_KEYS = ['sun','mon','tue','wed','thu','fri','sat'];
+const DAY_NAMES = ['Sonntag','Montag','Dienstag','Mittwoch','Donnerstag','Freitag','Samstag'];
+const SCHOOL_DAYS = [1,2,3,4,5]; // Mon-Fri indices
+
+let currentWeekOffset = 0;
+
+// ── Data helpers ──────────────────────────────────────────────────────────────
+
+function loadSettings() {
+  const raw = localStorage.getItem('hort_settings');
+  if (raw) return JSON.parse(raw);
+  return {
+    budget: 50,
+    schoolEnd: { mon:'13:15', tue:'13:15', wed:'12:15', thu:'13:15', fri:'12:15' },
+    noSchool:  { mon:false, tue:false, wed:false, thu:false, fri:false }
+  };
+}
+
+function saveData(settings) {
+  localStorage.setItem('hort_settings', JSON.stringify(settings));
+}
+
+function loadEntries() {
+  const raw = localStorage.getItem('hort_entries');
+  return raw ? JSON.parse(raw) : {};
+}
+
+function saveEntries(entries) {
+  localStorage.setItem('hort_entries', JSON.stringify(entries));
+}
+
+function dateKey(d) {
+  return d.toISOString().slice(0,10);
+}
+
+function getMonday(d) {
+  const day = new Date(d);
+  const dow = day.getDay();
+  const diff = dow === 0 ? -6 : 1 - dow;
+  day.setDate(day.getDate() + diff);
+  day.setHours(0,0,0,0);
+  return day;
+}
+
+function formatMinutes(mins) {
+  if (mins < 60) return `${mins} Min.`;
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return m === 0 ? `${h} Std.` : `${h} Std. ${m} Min.`;
+}
+
+function parseMinutes(timeStr) {
+  const [h, m] = timeStr.split(':').map(Number);
+  return h * 60 + m;
+}
+
+function calcCare(schoolEnd, pickupTime) {
+  const end = parseMinutes(schoolEnd);
+  const pickup = parseMinutes(pickupTime);
+  return Math.max(0, pickup - end);
+}
+
+function getDayKey(dayIndex) {
+  return DAY_KEYS[dayIndex];
+}
+
+// ── Week navigation ───────────────────────────────────────────────────────────
+
+function getWeekStart() {
+  const today = new Date();
+  const mon = getMonday(today);
+  mon.setDate(mon.getDate() + currentWeekOffset * 7);
+  return mon;
+}
+
+function changeWeek(delta) {
+  currentWeekOffset += delta;
+  renderWeek();
+}
+
+// ── Render ────────────────────────────────────────────────────────────────────
+
+function render() {
+  renderBudget();
+  renderToday();
+  renderWeek();
+}
+
+function renderBudget() {
+  const s = loadSettings();
+  const entries = loadEntries();
+  const totalBudgetMins = s.budget * 60;
+  let totalUsedMins = 0;
+  for (const key in entries) {
+    const e = entries[key];
+    if (e.pickupTime && e.schoolEnd) {
+      totalUsedMins += calcCare(e.schoolEnd, e.pickupTime);
+    }
+  }
+  const pct = totalBudgetMins > 0 ? Math.min(100, (totalUsedMins / totalBudgetMins) * 100) : 0;
+  const bar = document.getElementById('budget-bar');
+  bar.style.width = pct + '%';
+  bar.className = 'budget-bar-fill' + (pct >= 90 ? ' danger' : pct >= 70 ? ' warn' : '');
+
+  const usedH = (totalUsedMins / 60).toFixed(1);
+  const remainMins = Math.max(0, totalBudgetMins - totalUsedMins);
+  document.getElementById('budget-used-label').textContent = `${usedH} Std. verbraucht`;
+  document.getElementById('budget-total-label').textContent = `von ${s.budget} Std.`;
+  document.getElementById('budget-remaining-label').textContent = `Verbleibend: ${formatMinutes(remainMins)}`;
+
+  // Week total
+  const weekMins = getWeekTotalMins();
+  document.getElementById('budget-week-label').textContent = `Diese Woche: ${formatMinutes(weekMins)}`;
+}
+
+function getWeekTotalMins() {
+  const entries = loadEntries();
+  const weekStart = getMonday(new Date());
+  let total = 0;
+  for (let i = 0; i < 5; i++) {
+    const d = new Date(weekStart);
+    d.setDate(d.getDate() + i);
+    const key = dateKey(d);
+    const e = entries[key];
+    if (e && e.pickupTime && e.schoolEnd) {
+      total += calcCare(e.schoolEnd, e.pickupTime);
+    }
+  }
+  return total;
+}
+
+function renderToday() {
+  const s = loadSettings();
+  const today = new Date();
+  const dow = today.getDay(); // 0=Sun
+  const key = dateKey(today);
+  const entries = loadEntries();
+  const dayKey = getDayKey(dow);
+
+  document.getElementById('today-day-label').textContent = DAY_NAMES[dow] + ', ' + today.toLocaleDateString('de-DE');
+
+  const isSchoolDay = SCHOOL_DAYS.includes(dow) && !s.noSchool[dayKey];
+  const schoolEnd = s.schoolEnd[dayKey];
+  const entry = entries[key];
+
+  const endEl = document.getElementById('today-school-end');
+  const btn = document.getElementById('btn-pickup');
+  const resultEl = document.getElementById('today-result');
+
+  if (!isSchoolDay) {
+    endEl.innerHTML = 'Kein Schultag';
+    btn.disabled = true;
+    resultEl.style.display = 'none';
+    return;
+  }
+
+  endEl.innerHTML = `Unterricht endet: <span>${schoolEnd || '—'}</span>`;
+
+  if (entry && entry.pickupTime) {
+    btn.style.display = 'none';
+    resultEl.style.display = 'block';
+    document.getElementById('result-time').textContent = entry.pickupTime + ' Uhr';
+    const mins = calcCare(entry.schoolEnd, entry.pickupTime);
+    document.getElementById('result-duration').textContent = `Betreuungszeit heute: ${formatMinutes(mins)}`;
+  } else {
+    btn.style.display = 'block';
+    btn.disabled = !schoolEnd;
+    resultEl.style.display = 'none';
+  }
+}
+
+function renderWeek() {
+  const s = loadSettings();
+  const entries = loadEntries();
+  const weekStart = getWeekStart();
+  const today = dateKey(new Date());
+
+  const endDate = new Date(weekStart);
+  endDate.setDate(endDate.getDate() + 4);
+  document.getElementById('week-label').textContent =
+    weekStart.toLocaleDateString('de-DE', {day:'2-digit',month:'2-digit'}) + ' – ' +
+    endDate.toLocaleDateString('de-DE', {day:'2-digit',month:'2-digit',year:'numeric'});
+
+  const tbody = document.getElementById('week-tbody');
+  tbody.innerHTML = '';
+  let weekTotal = 0;
+
+  for (let i = 0; i < 5; i++) {
+    const d = new Date(weekStart);
+    d.setDate(d.getDate() + i);
+    const dow = d.getDay();
+    const dk = getDayKey(dow);
+    const key = dateKey(d);
+    const entry = entries[key];
+    const isToday = key === today;
+    const noSchool = s.noSchool[dk];
+    const schoolEnd = s.schoolEnd[dk];
+
+    const tr = document.createElement('tr');
+    if (isToday) tr.className = 'today-row';
+
+    let pickupCell = '—';
+    let durationCell = '—';
+    if (noSchool) {
+      pickupCell = '<span class="tag-no-school">kein Schultag</span>';
+    } else if (entry && entry.pickupTime) {
+      pickupCell = entry.pickupTime + ' Uhr';
+      const mins = calcCare(entry.schoolEnd || schoolEnd, entry.pickupTime);
+      weekTotal += mins;
+      durationCell = `<span class="duration-cell">${formatMinutes(mins)}</span>`;
+    }
+
+    tr.innerHTML = `
+      <td>${DAY_NAMES[dow].slice(0,2)}${isToday ? ' <small style="color:var(--primary)">●</small>' : ''}</td>
+      <td>${noSchool ? '—' : (schoolEnd || '—')}</td>
+      <td>${pickupCell}</td>
+      <td>${durationCell}</td>
+    `;
+    tbody.appendChild(tr);
+  }
+
+  document.getElementById('week-total-display').textContent = formatMinutes(weekTotal);
+  document.getElementById('budget-week-label').textContent = `Diese Woche: ${formatMinutes(weekTotal)}`;
+}
+
+// ── Actions ───────────────────────────────────────────────────────────────────
+
+function recordPickup() {
+  const s = loadSettings();
+  const now = new Date();
+  const dow = now.getDay();
+  const dk = getDayKey(dow);
+  const key = dateKey(now);
+  const schoolEnd = s.schoolEnd[dk];
+
+  const hh = String(now.getHours()).padStart(2,'0');
+  const mm = String(now.getMinutes()).padStart(2,'0');
+  const pickupTime = `${hh}:${mm}`;
+
+  const entries = loadEntries();
+  entries[key] = { pickupTime, schoolEnd };
+  saveEntries(entries);
+
+  render();
+}
+
+function resetToday() {
+  if (!confirm('Heutigen Eintrag wirklich löschen?')) return;
+  const key = dateKey(new Date());
+  const entries = loadEntries();
+  delete entries[key];
+  saveEntries(entries);
+  render();
+}
+
+// ── Settings ──────────────────────────────────────────────────────────────────
+
+function openSettings() {
+  const s = loadSettings();
+  document.getElementById('s-budget').value = s.budget;
+  const days = ['mon','tue','wed','thu','fri'];
+  days.forEach(d => {
+    document.getElementById(`s-${d}`).value = s.schoolEnd[d] || '';
+    document.getElementById(`s-${d}-off`).checked = s.noSchool[d] || false;
+  });
+  document.getElementById('settings-panel').classList.add('open');
+}
+
+function closeSettings() {
+  document.getElementById('settings-panel').classList.remove('open');
+}
+
+function saveSettings() {
+  const days = ['mon','tue','wed','thu','fri'];
+  const s = {
+    budget: parseFloat(document.getElementById('s-budget').value) || 0,
+    schoolEnd: {},
+    noSchool: {}
+  };
+  days.forEach(d => {
+    s.schoolEnd[d] = document.getElementById(`s-${d}`).value;
+    s.noSchool[d] = document.getElementById(`s-${d}-off`).checked;
+  });
+  saveData(s);
+  closeSettings();
+  render();
+}
+
+document.getElementById('settings-panel').addEventListener('click', function(e) {
+  if (e.target === this) closeSettings();
+});
+
+render();
+</script>
+</body>
+</html>
