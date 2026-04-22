@@ -113,7 +113,10 @@
 
 <header>
   <h1>🏫 Hort Abholzeiten</h1>
-  <button onclick="openSettings()" title="Einstellungen">⚙️</button>
+  <div style="display:flex;align-items:center;gap:0.6rem;">
+    <span id="sync-dot" title="Gespeichert" style="width:10px;height:10px;border-radius:50%;background:#22c55e;display:inline-block;flex-shrink:0"></span>
+    <button onclick="openSettings()" title="Einstellungen">⚙️</button>
+  </div>
 </header>
 
 <main>
@@ -242,27 +245,72 @@ let currentWeekOffset = 0;
 
 // ── Data helpers ──────────────────────────────────────────────────────────────
 
-function loadSettings() {
-  const raw = localStorage.getItem('hort_settings');
-  if (raw) return JSON.parse(raw);
-  return {
-    budget: 50,
-    schoolEnd: { mon:'13:15', tue:'13:15', wed:'12:15', thu:'13:15', fri:'12:15' },
-    noSchool:  { mon:false, tue:false, wed:false, thu:false, fri:false }
-  };
-}
+const DEFAULT_SETTINGS = {
+  budget: 50,
+  schoolEnd: { mon:'13:15', tue:'13:15', wed:'12:15', thu:'13:15', fri:'12:15' },
+  noSchool:  { mon:false, tue:false, wed:false, thu:false, fri:false }
+};
+
+let appData = { settings: { ...DEFAULT_SETTINGS }, entries: {} };
+let syncTimer = null;
+
+function loadSettings() { return appData.settings || { ...DEFAULT_SETTINGS }; }
+function loadEntries()  { return appData.entries  || {}; }
 
 function saveData(settings) {
-  localStorage.setItem('hort_settings', JSON.stringify(settings));
-}
-
-function loadEntries() {
-  const raw = localStorage.getItem('hort_entries');
-  return raw ? JSON.parse(raw) : {};
+  appData.settings = settings;
+  scheduleSave();
 }
 
 function saveEntries(entries) {
-  localStorage.setItem('hort_entries', JSON.stringify(entries));
+  appData.entries = entries;
+  scheduleSave();
+}
+
+// ── Server sync ───────────────────────────────────────────────────────────────
+
+async function initData() {
+  try {
+    const res = await fetch('/api/data');
+    if (res.ok) {
+      const data = await res.json();
+      if (data.settings) appData.settings = data.settings;
+      if (data.entries)  appData.entries  = data.entries;
+    }
+  } catch {
+    const cached = localStorage.getItem('hort_data');
+    if (cached) try { Object.assign(appData, JSON.parse(cached)); } catch {}
+  }
+  render();
+}
+
+function scheduleSave() {
+  setSyncDot('saving');
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(persistData, 800);
+}
+
+async function persistData() {
+  try {
+    const res = await fetch('/api/data', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(appData)
+    });
+    setSyncDot(res.ok ? 'ok' : 'error');
+  } catch {
+    setSyncDot('error');
+    localStorage.setItem('hort_data', JSON.stringify(appData));
+  }
+}
+
+function setSyncDot(status) {
+  const dot = document.getElementById('sync-dot');
+  if (!dot) return;
+  const map = { ok: ['#22c55e','Gespeichert'], saving: ['#f59e0b','Wird gespeichert…'], error: ['#ef4444','Fehler beim Speichern'] };
+  const [color, title] = map[status] || map.ok;
+  dot.style.background = color;
+  dot.title = title;
 }
 
 function dateKey(d) {
@@ -581,7 +629,7 @@ document.getElementById('settings-panel').addEventListener('click', function(e) 
   if (e.target === this) closeSettings();
 });
 
-render();
+initData();
 </script>
 </body>
 </html>
