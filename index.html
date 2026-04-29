@@ -91,6 +91,7 @@
     .btn-edit:hover { background: var(--border); color: var(--text); }
     .btn-add-entry { background: none; border: 1px dashed var(--border); color: var(--muted); border-radius: 6px; padding: 0.15rem 0.5rem; font-size: 0.78rem; cursor: pointer; }
     .btn-add-entry:hover { border-color: var(--primary); color: var(--primary); }
+    .latest-pickup { display: block; margin-top: 0.3rem; font-size: 0.78rem; font-weight: 600; color: var(--warning); }
 
     /* Edit modal */
     #edit-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 300; align-items: center; justify-content: center; padding: 1rem; }
@@ -375,29 +376,19 @@ function render() {
 
 function renderBudget() {
   const s = loadSettings();
-  const entries = loadEntries();
   const totalBudgetMins = s.budget * 60;
-  let totalUsedMins = 0;
-  for (const key in entries) {
-    const e = entries[key];
-    if (e.pickupTime && e.schoolEnd) {
-      totalUsedMins += calcCare(e.schoolEnd, e.pickupTime);
-    }
-  }
-  const pct = totalBudgetMins > 0 ? Math.min(100, (totalUsedMins / totalBudgetMins) * 100) : 0;
+  const weekMins = getWeekTotalMins();
+  const pct = totalBudgetMins > 0 ? Math.min(100, (weekMins / totalBudgetMins) * 100) : 0;
   const bar = document.getElementById('budget-bar');
   bar.style.width = pct + '%';
   bar.className = 'budget-bar-fill' + (pct >= 90 ? ' danger' : pct >= 70 ? ' warn' : '');
 
-  const usedH = (totalUsedMins / 60).toFixed(1);
-  const remainMins = Math.max(0, totalBudgetMins - totalUsedMins);
-  document.getElementById('budget-used-label').textContent = `${usedH} Std. verbraucht`;
-  document.getElementById('budget-total-label').textContent = `von ${s.budget} Std.`;
+  const usedH = (weekMins / 60).toFixed(1);
+  const remainMins = Math.max(0, totalBudgetMins - weekMins);
+  document.getElementById('budget-used-label').textContent = `${usedH} Std. diese Woche`;
+  document.getElementById('budget-total-label').textContent = `von ${s.budget} Std./Woche`;
+  document.getElementById('budget-week-label').textContent = `Wochenverbrauch`;
   document.getElementById('budget-remaining-label').textContent = `Verbleibend: ${formatMinutes(remainMins)}`;
-
-  // Week total
-  const weekMins = getWeekTotalMins();
-  document.getElementById('budget-week-label').textContent = `Diese Woche: ${formatMinutes(weekMins)}`;
 }
 
 function getWeekTotalMins() {
@@ -497,7 +488,15 @@ function renderWeek() {
       durationCell = `<span class="duration-cell">${formatMinutes(mins)}</span>`;
       pickupCell = `${entry.pickupTime} Uhr <button class="btn-edit" onclick="openEditModal('${key}')" title="Bearbeiten">✏️</button>`;
     } else if (!isFuture && !noSchool) {
-      pickupCell = `<button class="btn-add-entry" onclick="openEditModal('${key}')">+ eintragen</button>`;
+      let latestHint = '';
+      if (i === 4 && schoolEnd && weekTotal > 0) {
+        const remainMins = Math.max(0, s.budget * 60 - weekTotal);
+        const latestMins = parseMinutes(schoolEnd) + remainMins;
+        const lh = String(Math.floor(latestMins / 60) % 24).padStart(2, '0');
+        const lm = String(latestMins % 60).padStart(2, '0');
+        latestHint = `<span class="latest-pickup">spätestens ${lh}:${lm} Uhr</span>`;
+      }
+      pickupCell = `<button class="btn-add-entry" onclick="openEditModal('${key}')">+ eintragen</button>${latestHint}`;
     }
 
     tr.innerHTML = `
@@ -510,7 +509,6 @@ function renderWeek() {
   }
 
   document.getElementById('week-total-display').textContent = formatMinutes(weekTotal);
-  document.getElementById('budget-week-label').textContent = `Diese Woche: ${formatMinutes(weekTotal)}`;
 }
 
 // ── Actions ───────────────────────────────────────────────────────────────────
